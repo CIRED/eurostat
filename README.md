@@ -196,8 +196,8 @@ eurostat.get_avail_sdmx()
 ```
 
 Return a list of tuples. The first element of the list contains the header line.
-Example:
 
+Example:
 ```python
 >>> avail_sdmx = eurostat.get_avail_sdmx()
 >>> avail_sdmx
@@ -215,8 +215,8 @@ eurostat.get_avail_sdmx_df()
 ```
 
 Return a dataframe with one column. Dataflow (i.e. dataset) codes are in the dataframe index.
-Example:
 
+Example:
 ```python
 >>> avail_sdmx_df = eurostat.get_avail_sdmx_df()
 >>> avail_sdmx_df
@@ -244,7 +244,6 @@ eurostat.subset_avail_sdmx_df(avail_sdmx_df, keyword)
 Extract the rows where 'name' contains 'keyword' (case-insensitive).
 
 Example:
-
 ```python
 >>> keyword = 'fleet'
 >>> subset = eurostat.subset_avail_sdmx_df(avail_sdmx_df, keyword)
@@ -422,6 +421,14 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 
 
 ## History:
+
+### version 0.2.2 (31 Mar 2021):
+
+* Bug fix (sdmx non-annual data).
+
+### version 0.2.1 (10 Nov. 2020):
+
+* Bug fix (pandasdmx 0.9).
 
 ### version 0.2.0 (22 May 2020):
 

@@ -11,7 +11,7 @@ from pandas import DataFrame
 from itertools import product
 from gzip import decompress
 from re import sub
-from eurostat._decorators import estat_proxy, robust_pandasdmx_request
+#from eurostat._decorators import estat_proxy, robust_pandasdmx_request
 import sys
 
 # sys.tracebacklimit = 0
@@ -277,9 +277,16 @@ def get_sdmx_data(estat, code, StartPeriod, EndPeriod, filter_pars, flags=False,
             i += 1
             print("\rProgress: {:3.1%}".format(i / cart_len), end="\r")
     if flags:
-        header = list(s.key._fields).__add__([x for pair in [(int(o.dim), o.dim + '_OBS_STATUS') for o in s.obs()] for x in pair]) # only from the last data row
+        try:
+            header = list(s.key._fields).__add__([x for pair in [(int(o.dim), o.dim + '_OBS_STATUS') for o in s.obs()] for x in pair]) # only from the last data row
+        except Exception:
+            header = list(s.key._fields).__add__(
+                [x for pair in [(o.dim, o.dim + '_OBS_STATUS') for o in s.obs()] for x in pair])  # only from the last data row
     else:
-        header = list(s.key._fields).__add__([int(o.dim) for o in s.obs()]) # only from the last data row        
+        try:
+            header = list(s.key._fields).__add__([int(o.dim) for o in s.obs()]) # only from the last data row
+        except Exception:
+            header = list(s.key._fields).__add__([o.dim for o in s.obs()])  # only from the last data row
     data.insert(0,tuple(header))
     print("")
 

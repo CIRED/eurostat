@@ -11,7 +11,7 @@ from pandas import DataFrame
 from itertools import product
 from gzip import decompress
 from re import sub
-#from eurostat._decorators import estat_proxy, robust_pandasdmx_request
+from eurostat._decorators import estat_proxy,robust_pandasdmx_request
 import sys
 
 # sys.tracebacklimit = 0

@@ -13,7 +13,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_descr = f.read()
 
 setup(name='eurostat',
-      version='0.2.2',
+      version='0.2.3',
       license='MIT',
       date='2021',
       description="Eurostat Python Package",

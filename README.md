@@ -334,6 +334,9 @@ Progress:100.0%
  ...]
 ```
 
+For non-annual data the standard format to query a period is 'YYYY-MM-DD' (as string).
+
+
 ### As a pandas dataframe:
 
 ```python
@@ -422,9 +425,13 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 
 ## History:
 
+### version 0.2.3 (06 Apr 2021):
+
+* Internal bug fix.
+
 ### version 0.2.2 (31 Mar 2021):
 
-* Bug fix (sdmx non-annual data).
+* Bug fix (sdmx non-annual data). Deprecated.
 
 ### version 0.2.1 (10 Nov. 2020):
 

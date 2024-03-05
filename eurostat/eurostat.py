@@ -67,6 +67,14 @@ class __Uri__():
         XMLSNS_S + "Dataflows/" +\
         XMLSNS_S + "Dataflow/" +\
         XMLSNS_S + "Structure/Ref"
+    dsd_update_data_path = \
+        XMLSNS_M + "Structures/" +\
+        XMLSNS_S + "Dataflows/" +\
+        XMLSNS_S + "Dataflow/" +\
+        XMLSNS_C + "Annotations/" +\
+        XMLSNS_C + "Annotation[" +\
+        XMLSNS_C + "AnnotationType='UPDATE_DATA']/" +\
+        XMLSNS_C + "AnnotationTitle"
     ref_path = \
         XMLSNS_S + "LocalRepresentation/" +\
         XMLSNS_S + "Enumeration/Ref"
@@ -166,7 +174,7 @@ def get_data(code, flags=False, **kwargs):
     assert type(filter_pars) is dict, "Error: 'filter_pars' must be a dictionary."
     assert type(verbose) is bool, "Error: 'verbose' must be a boolean."
     assert type(reverse_time) is bool, "Error: 'reverse_time' must be a boolean."
-    __, provider, dims = __get_dims_info__(code, detail='order')
+    __, provider, dims, __ = __get_dims_info__(code, detail='order')
 
     if filter_pars == dict():
         filt = "?"
@@ -312,7 +320,7 @@ def get_pars(code):
     """
     assert type(code) is str, "Error: 'code' must be a string."
     
-    __, __, dims = __get_dims_info__(code, detail='name')
+    __, __, dims, __ = __get_dims_info__(code, detail='name')
     return dims
 
 
@@ -339,7 +347,7 @@ def get_dic(code, par=None, **kwargs):
     assert lang in lang_opt, "Error: 'lang' must be " + " or ".join(lang_opt)
     
     if par:    
-        agencyId, provider, dims = __get_dims_info__(code, detail='basic')
+        agencyId, provider, dims, __ = __get_dims_info__(code, detail='basic')
         try:
             par_id = [d[1] for d in dims if d[0].lower() == par.lower()][0]
         except:
@@ -358,7 +366,7 @@ def get_dic(code, par=None, **kwargs):
             l = [el for el in tmp_list if el[0] in par_values]
         columns = ['val', 'descr']
     else:
-        __, __, l = __get_dims_info__(code, detail='descr', lang=lang)
+        __, __, l, __ = __get_dims_info__(code, detail='descr', lang=lang)
         columns = ['dim', 'name', 'descr']
     
     if frmt == "list":
@@ -380,7 +388,7 @@ def get_par_values(code, par):
     assert type(code) is str, "Error: 'code' must be a string."
     assert type(par) is str, "Error: 'par' must be a string."
     
-    agencyId, provider, __ = __get_dims_info__(code, detail='empty')
+    agencyId, provider, __, __ = __get_dims_info__(code, detail='empty')
     url = __Uri__.BASE_URL[provider] +\
             "contentconstraint/" +\
             agencyId +\
@@ -518,8 +526,9 @@ def __get_dims_info__(code, **kwargs):
             df_root = __get_xml_root__(resp)
             agencyId = __agency_by_provider__[i][1]
             provider = __agency_by_provider__[i][0]
+            dsd_last_update = df_root.find(__Uri__.dsd_update_data_path).text
             if detail == 'empty':
-                return [agencyId, provider, []]
+                return [agencyId, provider, [], dsd_last_update]
             found = True
         except:
             pass
@@ -529,6 +538,7 @@ def __get_dims_info__(code, **kwargs):
         raise ValueError
     else:
         dsd_code = df_root.find(__Uri__.dsd_path).get("id")
+        dsd_last_update = df_root.find(__Uri__.dsd_update_data_path).text
     dsd_url = __Uri__.BASE_URL[provider] +\
                 "datastructure/" +\
                 agencyId +\
@@ -537,7 +547,7 @@ def __get_dims_info__(code, **kwargs):
                 "/latest"
     resp = __get_resp__(dsd_url)
     dsd_root = __get_xml_root__(resp)
-    
+
     # get dims
     if detail == 'name':
         dims = [dim.get("id")
@@ -567,7 +577,7 @@ def __get_dims_info__(code, **kwargs):
                          full_name,
                          description))
 
-    return [agencyId, provider, dims]
+    return [agencyId, provider, dims, dsd_last_update]
 
 
 def __get_xml_root__(resp):

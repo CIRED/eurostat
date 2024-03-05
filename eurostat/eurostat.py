@@ -58,6 +58,14 @@ class __Uri__():
         XMLSNS_S + "Dataflows/" +\
         XMLSNS_S + "Dataflow/" +\
         XMLSNS_S + "Structure/Ref"
+    dsd_update_data_path = \
+        XMLSNS_M + "Structures/" +\
+        XMLSNS_S + "Dataflows/" +\
+        XMLSNS_S + "Dataflow/" +\
+        XMLSNS_C + "Annotations/" +\
+        XMLSNS_C + "Annotation[" +\
+        XMLSNS_C + "AnnotationType='UPDATE_DATA']/" +\
+        XMLSNS_C + "AnnotationTitle"
     ref_path = \
         XMLSNS_S + "LocalRepresentation/" +\
         XMLSNS_S + "Enumeration/Ref"
@@ -119,7 +127,7 @@ def get_data(code, flags=False, **kwargs):
     assert type(filter_pars) is dict, "Error: 'filter_pars' must be a dictionary."
     assert type(verbose) is bool, "Error: 'verbose' must be a boolean."
     assert type(reverse_time) is bool, "Error: 'reverse_time' must be a boolean."
-    __, provider, __ = __get_info__(code)
+    __, provider, __, __ = __get_info__(code)
 
     if filter_pars == dict():
         filt = "?"
@@ -395,7 +403,7 @@ def subset_toc_df(toc_df, keyword):
 
 def __get_dims_info__(code):
     # dims = [(position, codelist_name, dimension_ID), ...]
-    agencyId, provider, dsd_code = __get_info__(code)
+    agencyId, provider, dsd_code, dsd_last_update = __get_info__(code)
     dsd_url = __Uri__.BASE_URL[provider] + "datastructure/" + agencyId + "/" + dsd_code + "/latest"
     resp = __get_resp__(dsd_url)
     root = __get_xml_root__(resp)
@@ -500,4 +508,5 @@ def __get_info__(code):
         raise ValueError
     else:
         dsd_code = root.find(__Uri__.dsd_path).get("id")
-        return [agencyId, provider, dsd_code]
+        dsd_last_update = root.find(__Uri__.dsd_update_data_path).text
+        return[agencyId, provider, dsd_code, dsd_last_update]

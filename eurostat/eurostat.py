@@ -163,20 +163,26 @@ def get_data(code, flags=False, **kwargs):
     Return it as a list of tuples.
     """
 
-    opt = ["filter_pars", "verbose", "reverse_time"]
+    opt = ["filter_pars", "verbose", "reverse_time", "cache"]
     assert set(kwargs).issubset(opt), "Argument not allowed: " + \
         ", ".join(list(set(kwargs).difference(opt)))
     filter_pars = kwargs.get("filter_pars", dict())
     verbose = kwargs.get("verbose", False)
     reverse_time = kwargs.get("reverse_time", False)
+    cache = kwargs.get("cache", None)
     assert type(code) is str, "Error: 'code' must be a string."
     assert type(flags) is bool, "Error: 'flags' must be a boolean."
     assert type(filter_pars) is dict, "Error: 'filter_pars' must be a dictionary."
     assert type(verbose) is bool, "Error: 'verbose' must be a boolean."
     assert type(reverse_time) is bool, "Error: 'reverse_time' must be a boolean."
+    assert cache is None or callable(cache), "Error: 'cache' must be a function or None."
     __, provider, dims, dsd_last_update = __get_dims_info__(code, detail='order')
 
-    alldata = __get_data__(code, dims, flags, filter_pars, verbose, provider)
+    if cache:
+        cached_get_data = cache(__get_data__, ignore=["dims", "verbose", "provider"], verbose=verbose)
+        alldata = cached_get_data(code, dims, flags, filter_pars, verbose, provider, dsd_last_update)
+    else:
+        alldata = __get_data__(code, dims, flags, filter_pars, verbose, provider, dsd_last_update)
 
     if verbose:
         print("\n")
@@ -566,7 +572,7 @@ def __get_resp__(url,**kwargs):
             resp = __get_resp__(async_status_url.replace("/status/","/data/"))
     return resp
 
-def __get_data__(code, dims, flags, filter_pars, verbose, provider):
+def __get_data__(code, dims, flags, filter_pars, verbose, provider, dsd_last_update):
     if filter_pars == dict():
         filt = "?"
     else:

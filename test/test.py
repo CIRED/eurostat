@@ -111,3 +111,32 @@ data = eurostat.get_data_df(code, True, filter_pars=my_filter_pars)
 print('data =')
 print(data)
 
+try:
+    import tempfile
+    import time
+    from joblib import Memory
+    tempdir = tempfile.mkdtemp()
+    memory = Memory(tempdir)
+    print("Testing joblib caching")
+
+    start_time = time.time()
+    data_no_cache = eurostat.get_data_df('GOV_10DD_SLGD')
+    end_time = time.time()
+    print(f"Time taken for a basic call: {end_time - start_time} seconds")
+
+    start_time = time.time()
+    data_caching = eurostat.get_data_df('GOV_10DD_SLGD', cache=memory.cache)
+    end_time = time.time()
+    print(f"Time taken for the caching call: {end_time - start_time} seconds")
+
+    start_time = time.time()
+    data_cached = eurostat.get_data_df('GOV_10DD_SLGD', cache=memory.cache)
+    end_time = time.time()
+    print(f"Time taken for the cached call: {end_time - start_time} seconds")
+
+    if data_no_cache.equals(data_cached):
+            print("Caching returns the same dataframes.")
+    else:
+            print("Caching returns different dataframes.")
+except ImportError:
+        print("Use the joblib library to test caching.")

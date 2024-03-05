@@ -8,7 +8,8 @@ Tools to read data from Eurostat API.
 * Read Eurostat data and metadata as list of tuples or as pandas dataframe.
 * Use the new SDMX 2.1 Eurostat web services.
 * Download data from Eurostat, COMEXT, DG COMP, DG ENV, DG GROW.
-* Available from both pip and [conda][condapack]. 
+* Available from both pip and [conda][condapack].
+* Optionally cache data with joblib.Memory, to avoid downloading large unchanged datasets multiple times.
 * MIT license.
 
 
@@ -493,6 +494,29 @@ eurostat.get_requests_args()
 
 It returns a dictionary with the argument names and their respective values, exactly as they are passed to the request.
 
+## In case you want to use a disk cache
+
+Note that a caching call checks the last update date, so your data will be downloaded again when a data update is done in Eurostat. This also means that reproducibility is not guaranteed (but you can get past results with joblib if you haven't cleared your cache).
+
+For a temporary cache (your coding session), you can use:
+
+```python
+import tempfile
+from joblib import Memory
+tempdir = tempfile.mkdtemp()
+memory = Memory(tempdir)
+
+eurostat.get_data(code, cache=memory.cache)
+```
+
+For a permanent cache (on your hard disk), you can use:
+
+```python
+from joblib import Memory
+memory = Memory(your_joblib_cache_directory)
+
+eurostat.get_data(code, cache=memory.cache)
+```
 
 ## Bug reports and feature requests:
 
@@ -611,3 +635,6 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 [condapack]: https://anaconda.org/noemicazzaniga/eurostat
 [req]: https://requests.readthedocs.io/en/latest/
 [req_req]: https://requests.readthedocs.io/en/latest/api/#requests.Session.request
+
+## Acknowlegments
+* joblib.Memory data caching implemented by Nicolas Graves (CIRED, <ngraves@ngraves.fr>)

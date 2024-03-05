@@ -174,104 +174,9 @@ def get_data(code, flags=False, **kwargs):
     assert type(filter_pars) is dict, "Error: 'filter_pars' must be a dictionary."
     assert type(verbose) is bool, "Error: 'verbose' must be a boolean."
     assert type(reverse_time) is bool, "Error: 'reverse_time' must be a boolean."
-    __, provider, dims, __ = __get_dims_info__(code, detail='order')
+    __, provider, dims, dsd_last_update = __get_dims_info__(code, detail='order')
 
-    if filter_pars == dict():
-        filt = "?"
-    else:
-        start = ""
-        end = ""
-        nontime_pars = {}
-        for k in filter_pars:
-            if k == "startPeriod":
-                fs = str(filter_pars[k])
-                start = "startPeriod=" + fs + "&"
-            elif k == "endPeriod":
-                fe = str(filter_pars[k])
-                end = "endPeriod=" + fe + "&"
-            else:
-                nontime_pars[k] = filter_pars[k] if type(
-                    filter_pars[k]) is list else [filter_pars[k], ]
-        
-        if len(nontime_pars) > 0:
-            filter_lists = [tuple(zip(
-                (d,) * len(nontime_pars[str(d)]), nontime_pars[str(d)])) for d in nontime_pars]
-            cart = [el for el in product(*filter_lists)]
-            filter_str_list = [
-                ".".join([dict(c).get(j[1], "") for j in sorted(dims)]) for c in cart]
-            filt = []
-            for f in filter_str_list:
-                filt.append("/" + f + "?" + start + end)
-        else:
-            filt = ["?" + start + end, ]
-
-    alldata = []
-    is_header = False
-    if flags:
-        n_el = 2
-    else:
-        n_el = 1
-    filt_len = len(filt)
-    if verbose:
-        counter = 0
-        print("\rDownload progress: {:3.1%}".format(counter), end="\r")
-    for f_str in filt:
-        data_url = __Uri__.BASE_URL[provider] +\
-                    "data/" +\
-                    code +\
-                    f_str +\
-                    "format=TSV&compressed=true"
-        resp = __get_resp__(data_url, provider=provider)
-        data = []
-        if resp is not None:
-            try:
-                dec = decompress(resp.content).decode("utf-8")
-            except:
-                print(resp.content)
-            n_text_fields = len(dec[:dec.find("\t")].split(","))
-            raw_data = dec.split("\r\n")
-            is_first_data_row = True
-            for row in raw_data:
-                row_list = re.split(r"\t|,", row)
-                if is_first_data_row:
-                    is_first_data_row = False
-                    if not is_header:
-                        is_header = True
-                        if flags:
-                            head = row_list[:n_text_fields] +\
-                                      [x.strip()+f for x in row_list[n_text_fields:]
-                                           for f in ("_value", "_flag")]
-                        else:
-                            head = [x.strip() for x in row_list]
-                        alldata = [tuple(head),]
-                elif row_list != ['',]:
-                    l = row_list[:n_text_fields]
-                    for el in row_list[n_text_fields:]:
-                        tmp = [t.strip() for t in el.split(" ")]
-                        if tmp[0] == None:
-                            tmp = [None, None]
-                        elif tmp[0] == ":" or tmp[0] == "0n" or tmp[0] == "n":
-                            if len(tmp) == 1:
-                                tmp.insert(0, None)
-                            elif len(tmp) == 2:
-                                tmp[1] = " ".join(tmp).strip()
-                                tmp[0] = None
-                            else:
-                                raise Exception
-                        else:
-                            try:
-                                tmp[0] = float(tmp[0])
-                            except:
-                                tmp = [el, None]
-                        l.extend(tmp[:n_el])
-                    data.append(tuple(l))           
-
-        alldata.extend(data)
-
-        if verbose:
-            counter += 1
-            print("\rDownload progress: {:3.1%}".format(
-                counter/filt_len), end="\r")
+    alldata = __get_data__(code, dims, flags, filter_pars, verbose, provider)
 
     if verbose:
         print("\n")
@@ -660,3 +565,103 @@ def __get_resp__(url,**kwargs):
                     raise ConnectionError
             resp = __get_resp__(async_status_url.replace("/status/","/data/"))
     return resp
+
+def __get_data__(code, dims, flags, filter_pars, verbose, provider):
+    if filter_pars == dict():
+        filt = "?"
+    else:
+        start = ""
+        end = ""
+        nontime_pars = {}
+        for k in filter_pars:
+            if k == "startPeriod":
+                fs = str(filter_pars[k])
+                start = "startPeriod=" + fs + "&"
+            elif k == "endPeriod":
+                fe = str(filter_pars[k])
+                end = "endPeriod=" + fe + "&"
+            else:
+                nontime_pars[k] = filter_pars[k] if type(
+                    filter_pars[k]) is list else [filter_pars[k], ]
+
+        if len(nontime_pars) > 0:
+            filter_lists = [tuple(zip(
+                (d,) * len(nontime_pars[str(d)]), nontime_pars[str(d)])) for d in nontime_pars]
+            cart = [el for el in product(*filter_lists)]
+            filter_str_list = [
+                ".".join([dict(c).get(j[1], "") for j in sorted(dims)]) for c in cart]
+            filt = []
+            for f in filter_str_list:
+                filt.append("/" + f + "?" + start + end)
+        else:
+            filt = ["?" + start + end, ]
+
+    alldata = []
+    is_header = False
+    if flags:
+        n_el = 2
+    else:
+        n_el = 1
+    filt_len = len(filt)
+    if verbose:
+        counter = 0
+        print("\rDownload progress: {:3.1%}".format(counter), end="\r")
+    for f_str in filt:
+        data_url = __Uri__.BASE_URL[provider] +\
+                    "data/" +\
+                    code +\
+                    f_str +\
+                    "format=TSV&compressed=true"
+        resp = __get_resp__(data_url, provider=provider)
+        data = []
+        if resp is not None:
+            try:
+                dec = decompress(resp.content).decode("utf-8")
+            except:
+                print(resp.content)
+            n_text_fields = len(dec[:dec.find("\t")].split(","))
+            raw_data = dec.split("\r\n")
+            is_first_data_row = True
+            for row in raw_data:
+                row_list = re.split(r"\t|,", row)
+                if is_first_data_row:
+                    is_first_data_row = False
+                    if not is_header:
+                        is_header = True
+                        if flags:
+                            head = row_list[:n_text_fields] +\
+                                      [x.strip()+f for x in row_list[n_text_fields:]
+                                           for f in ("_value", "_flag")]
+                        else:
+                            head = [x.strip() for x in row_list]
+                        alldata = [tuple(head),]
+                elif row_list != ['',]:
+                    l = row_list[:n_text_fields]
+                    for el in row_list[n_text_fields:]:
+                        tmp = [t.strip() for t in el.split(" ")]
+                        if tmp[0] == None:
+                            tmp = [None, None]
+                        elif tmp[0] == ":" or tmp[0] == "0n" or tmp[0] == "n":
+                            if len(tmp) == 1:
+                                tmp.insert(0, None)
+                            elif len(tmp) == 2:
+                                tmp[1] = " ".join(tmp).strip()
+                                tmp[0] = None
+                            else:
+                                raise Exception
+                        else:
+                            try:
+                                tmp[0] = float(tmp[0])
+                            except:
+                                tmp = [el, None]
+                        l.extend(tmp[:n_el])
+                    data.append(tuple(l))
+
+        alldata.extend(data)
+
+        if verbose:
+            counter += 1
+            print("\rDownload progress: {:3.1%}".format(
+                counter/filt_len), end="\r")
+
+    return alldata

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@author: Noemi E. Cazzaniga - 2023
+@author: Noemi E. Cazzaniga - 2024
 @email: noemi.cazzaniga@polimi.it
 """
 
@@ -14,7 +14,15 @@ from gzip import decompress
 from itertools import product
 
 
-__proxydic__ = None
+
+__ra__ = {"timeout": 120.}
+__agency_by_provider__ = [("EUROSTAT", "ESTAT"),
+                          ("COMEXT", "ESTAT"),
+                          ("COMP", "COMP"),
+                          ("EMPL", "EMPL"),
+                          ("GROW", "GROW"),
+                          ]
+
 
 
 class __Uri__():
@@ -34,6 +42,7 @@ class __Uri__():
     XMLSNS_M = "{http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message}"
     XMLSNS_S = "{http://www.sdmx.org/resources/sdmxml/schemas/v2_1/structure}"
     XMLSNS_C = "{http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common}"
+    XMLSNS_L = "{http://www.w3.org/XML/1998/namespace}lang"
     XMLSNS_ENV = "{http://schemas.xmlsoap.org/soap/envelope/}"
     XMLSNS_ASYNC_NS0 = "{http://estat.ec.europa.eu/disschain/soap/asynchronous}"
     XMLSNS_ASYNC_NS1 = "{http://estat.ec.europa.eu/disschain/asynchronous}"
@@ -77,6 +86,44 @@ class __Uri__():
     sync_status_path = \
         XMLSNS_ENV + "Body/" +\
         XMLSNS_SYNC_NS0 + "syncResponse/queued/status"
+    codelist_path =  \
+        XMLSNS_M + "Structures/" +\
+        XMLSNS_S + "Codelists/" +\
+        XMLSNS_S + "Codelist"
+
+
+def set_requests_args(**kwargs):
+    """
+    Allows to set some arguments for "requests":
+    - timeout: how long to wait for the server before raising an error. (optional)
+        Default: 120 sec.
+    - proxies : dict with protocol, user and password. (optional)
+        For the Eurostat API, only https proxy.
+        Examples: {'https': 'http://myuser:mypass@123.45.67.89:1234'}
+                  {'https': 'https://123.45.67.89:1234'}
+        Default: None.
+    - verify : for the server’s TLS certificate. (optional)
+        Default: None.
+    - cert : user-provided SSL certificate. (optional)
+       Default: None.
+    Return None.
+
+    """
+    opt = ["timeout", "proxies", "verify", "cert"]
+    assert set(kwargs.keys()).issubset(opt), "Argument not allowed: " + \
+        ", ".join(list(set(kwargs).difference(opt)))
+    global __ra__
+    for k in kwargs:
+        __ra__[k] = kwargs[k]
+
+
+def get_requests_args():
+    """
+    Get the current set arguments for "requests".
+    Return a dict with arg names and their respective values.
+    """
+
+    return __ra__
 
 
 def setproxy(proxyinfo):
@@ -92,14 +139,14 @@ def setproxy(proxyinfo):
     assert "https" in proxyinfo.keys(), "The key 'https' is missing in proxyinfo."
     assert (":" in proxyinfo["https"][2] and
             "//" in proxyinfo["https"][2]), "Error in proxy host. It must be in the form: 'http://url:port'"
-    global __proxydic__
+    global __ra__
     [protocol, url_port] = proxyinfo['https'][2].split('//')
     try:
         myhttpsquotedpass = requests.utils.quote(proxyinfo['https'][1])
         myhttpsproxy = proxyinfo['https'][0] + ':' + myhttpsquotedpass + '@' + url_port
     except:
         myhttpsproxy = url_port
-    __proxydic__ = {'https': protocol + '//' + myhttpsproxy}
+    __ra__['proxies'] = {'https': protocol + '//' + myhttpsproxy}
 
 
 def get_data(code, flags=False, **kwargs):
@@ -109,8 +156,8 @@ def get_data(code, flags=False, **kwargs):
     """
 
     opt = ["filter_pars", "verbose", "reverse_time"]
-    assert set(kwargs).issubset(set(opt)), "Argument not allowed: " + \
-        ", ".join(list(set(kwargs).difference(set(opt))))
+    assert set(kwargs).issubset(opt), "Argument not allowed: " + \
+        ", ".join(list(set(kwargs).difference(opt)))
     filter_pars = kwargs.get("filter_pars", dict())
     verbose = kwargs.get("verbose", False)
     reverse_time = kwargs.get("reverse_time", False)
@@ -119,7 +166,7 @@ def get_data(code, flags=False, **kwargs):
     assert type(filter_pars) is dict, "Error: 'filter_pars' must be a dictionary."
     assert type(verbose) is bool, "Error: 'verbose' must be a boolean."
     assert type(reverse_time) is bool, "Error: 'reverse_time' must be a boolean."
-    __, provider, __ = __get_info__(code)
+    __, provider, dims = __get_dims_info__(code, detail='order')
 
     if filter_pars == dict():
         filt = "?"
@@ -142,9 +189,8 @@ def get_data(code, flags=False, **kwargs):
             filter_lists = [tuple(zip(
                 (d,) * len(nontime_pars[str(d)]), nontime_pars[str(d)])) for d in nontime_pars]
             cart = [el for el in product(*filter_lists)]
-            dims_order = [(d[0], d[1]) for d in __get_dims_info__(code)[2]]
             filter_str_list = [
-                ".".join([dict(c).get(j[1], "") for j in sorted(dims_order)]) for c in cart]
+                ".".join([dict(c).get(j[1], "") for j in sorted(dims)]) for c in cart]
             filt = []
             for f in filter_str_list:
                 filt.append("/" + f + "?" + start + end)
@@ -170,7 +216,10 @@ def get_data(code, flags=False, **kwargs):
         resp = __get_resp__(data_url, provider=provider)
         data = []
         if resp is not None:
-            dec = decompress(resp.content).decode("utf-8")
+            try:
+                dec = decompress(resp.content).decode("utf-8")
+            except:
+                print(resp.content)
             n_text_fields = len(dec[:dec.find("\t")].split(","))
             raw_data = dec.split("\r\n")
             is_first_data_row = True
@@ -263,51 +312,64 @@ def get_pars(code):
     """
     assert type(code) is str, "Error: 'code' must be a string."
     
-    __, __, dims = __get_dims_info__(code)
-    return [d[1] for d in dims]
+    __, __, dims = __get_dims_info__(code, detail='name')
+    return dims
 
 
-def get_dic(code, par, **kwargs):
+def get_dic(code, par=None, **kwargs):
     """
-    Download an Eurostat codelist.
-    Return it as a Python list or dictionary.
+    Download an Eurostat codelist with the descriptions
+    of the dimensions of a dataset or
+    of the parameter values.
+    Return it as a Python list, a dataframe or a dictionary.
     """
 
     kwargs_opt = ["frmt", "full", "lang"]
-    frmt_opt = ["list", "dict"]
+    frmt_opt = ["list", "dict", "df"]
     lang_opt = ["en", "fr", "de"]
-    assert set(kwargs).issubset(set(kwargs_opt)), "Argument not allowed: " + \
-        ", ".join(list(set(kwargs).difference(set(kwargs_opt))))
+    assert set(kwargs).issubset(kwargs_opt), "Argument not allowed: " + \
+        ", ".join(list(set(kwargs).difference(kwargs_opt)))
     frmt = kwargs.get("frmt", "list")
     full = kwargs.get("full", True)
     lang = kwargs.get("lang", "en")
     assert type(code) is str, "Error: 'code' must be a string."
-    assert type(par) is str, "Error: 'par' must be a string."
+    assert type(par) is str or par is None, "Error: 'par' must be a string."
     assert frmt in frmt_opt, "Error: 'frmt' must be " + " or ".join(frmt_opt)
     assert type(full) is bool, "Error: 'full' must be a boolean."
     assert lang in lang_opt, "Error: 'lang' must be " + " or ".join(lang_opt)
     
-    agencyId, provider, dims = __get_dims_info__(code)
-    try:
-        par_id = [i[2] for i in dims if i[1].lower() == par.lower()][0]
-    except:
-        print('Error: ' + par + ' not in ' + code)
-        raise
-    url = __Uri__.BASE_URL[provider] + "codelist/" + agencyId + \
-        "/"+ par_id + "/latest?format=TSV&compressed=true&lang=" + lang
-    resp = __get_resp__(url)
-    resp_list = decompress(resp.content).decode("utf-8").split("\r\n")
-    resp_list.pop()
-    tmp_list = [tuple(el.split("\t")) for el in resp_list]
-    if full:
-        l = tmp_list
+    if par:    
+        agencyId, provider, dims = __get_dims_info__(code, detail='basic')
+        try:
+            par_id = [d[1] for d in dims if d[0].lower() == par.lower()][0]
+        except:
+            print('Error: ' + par + ' not in ' + code)
+            raise
+        url = __Uri__.BASE_URL[provider] + "codelist/" + agencyId + \
+            "/"+ par_id + "/latest?format=TSV&compressed=true&lang=" + lang
+        resp = __get_resp__(url)
+        resp_list = decompress(resp.content).decode("utf-8").split("\r\n")
+        resp_list.pop()
+        tmp_list = [tuple(el.split("\t")) for el in resp_list]
+        if full:
+            l = tmp_list
+        else:
+            par_values = get_par_values(code, par)
+            l = [el for el in tmp_list if el[0] in par_values]
+        columns = ['val', 'descr']
     else:
-        par_values = get_par_values(code, par)
-        l = [el for el in tmp_list if el[0] in par_values]
+        __, __, l = __get_dims_info__(code, detail='descr', lang=lang)
+        columns = ['dim', 'name', 'descr']
+    
     if frmt == "list":
         return l
     elif frmt == "dict":
-        return dict(l)
+        if par:
+            return dict(l)
+        else:
+            return dict([(ld[0], {'name': ld[1], 'descr': ld[2]}) for ld in l])
+    elif frmt == 'df':
+        return DataFrame(l, columns=columns)
 
 
 def get_par_values(code, par):
@@ -318,18 +380,31 @@ def get_par_values(code, par):
     assert type(code) is str, "Error: 'code' must be a string."
     assert type(par) is str, "Error: 'par' must be a string."
     
-    agencyId, provider, dims = __get_dims_info__(code)
-    url = __Uri__.BASE_URL[provider] + "contentconstraint/" + agencyId + "/" + code
+    agencyId, provider, __ = __get_dims_info__(code, detail='empty')
+    url = __Uri__.BASE_URL[provider] +\
+            "contentconstraint/" +\
+            agencyId +\
+            "/" +\
+            code
     resp = __get_resp__(url)
     root = __get_xml_root__(resp)
     return [v.text for p in root.findall(__Uri__.par_path) if p.get("id").lower() == par.lower() for v in p.findall(__Uri__.val_path)]
 
 
-def get_toc():
+def get_toc(**kwargs):
     """
-    Download the Eurostat table of contents.
+    Download the Eurostat table of contents of all the datasets, or
+    of only one if the argument dataset is not 'all'.
+    lang can be 'en'', 'fr', 'de'.
     Return it as a list of tuples.
     """
+    kwargs_opt = ['dataset', 'lang']
+    assert set(kwargs.keys()).issubset(kwargs_opt), "Argument not allowed: " + \
+        ", ".join(list(set(kwargs).difference(kwargs_opt)))
+    dataset = kwargs.get('dataset', 'all')
+    lang = kwargs.get('lang', 'en')
+    done = False
+    
     toc = [("title",
             "code",
             "type",
@@ -339,46 +414,66 @@ def get_toc():
             "data end",
             # "agencyId"
             ), ]
-    for base_url in __Uri__.BASE_URL.values():
-        url = base_url + "dataflow/all?format=JSON&compressed=true"
+    for prov in __Uri__.BASE_URL:
+        base_url = __Uri__.BASE_URL[prov]
+        if dataset == 'all':
+            url = base_url +\
+                    "dataflow/all?format=JSON&compressed=true&lang=" +\
+                    lang
+        else:
+            url = base_url +\
+                    "dataflow/" +\
+                    dict(__agency_by_provider__)[prov] +\
+                    "/" +\
+                    dataset +\
+                    "?format=JSON&compressed=true&lang=" +\
+                    lang
         resp = __get_resp__(url)
-        resp_txt = decompress(resp.content).decode("utf-8")
-        resp_dict = json.loads(resp_txt)
-        for el in resp_dict["link"]["item"]:
-            title = el["label"]
-            code = el["extension"]["id"]
-            _type = el["class"]
-            data_start = None
-            data_end = None
-            for a in el["extension"]["annotation"]:
-                if a["type"] == "UPDATE_DATA":
-                    last_update = a["date"]
-                elif a["type"] == "UPDATE_STRUCTURE":
-                    last_struct_change = a["date"]
-                elif a["type"] == "OBS_PERIOD_OVERALL_OLDEST":
-                    data_start = a["title"]
-                elif a["type"] == "OBS_PERIOD_OVERALL_LATEST":
-                    data_end = a["title"]
-            # agencyId = el["extension"]["agencyId"]
-            toc.append((title,
-                        code,
-                        _type,
-                        last_update,
-                        last_struct_change,
-                        data_start,
-                        data_end,
-                        # agencyId
-                        ))
+        if resp.ok:
+            resp_txt = decompress(resp.content).decode("utf-8")
+            resp_dict = json.loads(resp_txt)
+            if dataset == 'all':
+                content = resp_dict["link"]["item"]
+            else:
+                content = [resp_dict,]
+                done = True
+            for el in content:
+                title = el["label"]
+                code = el["extension"]["id"]
+                _type = el["class"]
+                data_start = None
+                data_end = None
+                for a in el["extension"]["annotation"]:
+                    if a["type"] == "UPDATE_DATA":
+                        last_update = a["date"]
+                    elif a["type"] == "UPDATE_STRUCTURE":
+                        last_struct_change = a["date"]
+                    elif a["type"] == "OBS_PERIOD_OVERALL_OLDEST":
+                        data_start = a["title"]
+                    elif a["type"] == "OBS_PERIOD_OVERALL_LATEST":
+                        data_end = a["title"]
+                # agencyId = el["extension"]["agencyId"]
+                toc.append((title,
+                            code,
+                            _type,
+                            last_update,
+                            last_struct_change,
+                            data_start,
+                            data_end,
+                            # agencyId
+                            ))
+            if done:
+                break
     return toc
 
 
-def get_toc_df():
+def get_toc_df(**kwargs):
     """
-    Download the Eurostat table of contents.
-    Return it as a pandas dataframe.
+    Download the Eurostat table of contents of all the datasets, or
+    of only one if the argument dataset is not 'all'.
     """
 
-    t = get_toc()
+    t = get_toc(**kwargs)
 
     return DataFrame(t[1:], columns=t[0])
 
@@ -393,14 +488,85 @@ def subset_toc_df(toc_df, keyword):
     return toc_df[toc_df["title"].str.contains(keyword, case=False)]
 
 
-def __get_dims_info__(code):
-    # dims = [(position, codelist_name, dimension_ID), ...]
-    agencyId, provider, dsd_code = __get_info__(code)
-    dsd_url = __Uri__.BASE_URL[provider] + "datastructure/" + agencyId + "/" + dsd_code + "/latest"
+def __get_dims_info__(code, **kwargs):
+    """
+    if detail == 'descr' : dims = [(codelist_name, full_name, description), ...]
+    if detail == 'order' : dims = [(position, codelist_name), ...]
+    if detail == 'name' : dims = [codelist_name, ...]
+    if detail == 'empty' : dims = []
+    if detail == 'basic' :  dims = [(codelist_name, dimension_ID), ...]
+    """
+
+    assert set(kwargs.keys()), 'Wrong kwargs'
+    detail = kwargs.get('detail', None)
+    lang = kwargs.get('lang', 'en')
+    
+    # retrieve agencyId, provider, df_root, dsd_root
+    found = False
+    i = 0
+    df_tail = "/latest?detail=referencepartial&references=descendants" if detail == 'descr' else \
+                "/latest"
+    while (not found) and (i <= len(__agency_by_provider__)):
+        try:
+            df_url = __Uri__.BASE_URL[__agency_by_provider__[i][0]] +\
+                    "dataflow/" +\
+                    __agency_by_provider__[i][1] +\
+                    "/" +\
+                    code +\
+                    df_tail
+            resp = __get_resp__(df_url, is_raise=False)
+            df_root = __get_xml_root__(resp)
+            agencyId = __agency_by_provider__[i][1]
+            provider = __agency_by_provider__[i][0]
+            if detail == 'empty':
+                return [agencyId, provider, []]
+            found = True
+        except:
+            pass
+        i += 1
+    if not found:
+        print("Dataset not found: " + code)
+        raise ValueError
+    else:
+        dsd_code = df_root.find(__Uri__.dsd_path).get("id")
+    dsd_url = __Uri__.BASE_URL[provider] +\
+                "datastructure/" +\
+                agencyId +\
+                "/" +\
+                dsd_code +\
+                "/latest"
     resp = __get_resp__(dsd_url)
-    root = __get_xml_root__(resp)
-    dims = [(dim.get("position"), dim.get("id"), dim.find(__Uri__.ref_path).get("id"))
-             for dim in root.findall(__Uri__.dim_path)]
+    dsd_root = __get_xml_root__(resp)
+    
+    # get dims
+    if detail == 'name':
+        dims = [dim.get("id")
+                 for dim in dsd_root.findall(__Uri__.dim_path)]
+    elif detail == 'basic':
+        dims = [(dim.get("id"), dim.find(__Uri__.ref_path).get("id"))
+                 for dim in dsd_root.findall(__Uri__.dim_path)]
+    elif detail == 'order':
+        dims = [(dim.get("position"), dim.get("id"))
+                 for dim in dsd_root.findall(__Uri__.dim_path)]
+    elif detail == 'descr':
+        descr = df_root.findall(__Uri__.codelist_path)
+        dims = []
+        for dim1 in dsd_root.findall(__Uri__.dim_path):
+            dimension_ID = dim1.find(__Uri__.ref_path).get("id")
+            for dim in descr:
+                if dim.get("id") == dimension_ID:
+                    full_name = None
+                    for d in dim.findall(__Uri__.XMLSNS_C + 'Name'):
+                        if d.get(__Uri__.XMLSNS_L, None) == lang:
+                            full_name = d.text
+                    if full_name == None:
+                        full_name = dim.findtext(__Uri__.XMLSNS_C + 'Name')
+                    description = dim.findtext(__Uri__.XMLSNS_C + 'Description')
+                    break
+            dims.append((dim1.get("id"),
+                         full_name,
+                         description))
+
     return [agencyId, provider, dims]
 
 
@@ -412,9 +578,7 @@ def __get_xml_root__(resp):
     return root
 
 
-def __get_resp__(url, **kwargs):
-    provider = kwargs.get("provider", None)
-    is_raise = kwargs.get("is_raise", True)
+def __get_raw_resp__(url, is_raise):
     is_ok = False
     max_att = 4
     n_att = 0
@@ -422,7 +586,7 @@ def __get_resp__(url, **kwargs):
     while (not is_ok) and (n_att != max_att):
         n_att += 1
         try:
-            resp = requests.get(url, timeout=120., proxies=__proxydic__)
+            resp = requests.get(url,  **__ra__)
             is_ok = resp.ok
         except Exception as e:
             last_exception = e
@@ -430,15 +594,22 @@ def __get_resp__(url, **kwargs):
         if is_raise:
             raise last_exception
         else:
-            return None
+            resp = None
     elif resp.url == "https://sorry.ec.europa.eu/":
         print("Server inaccessibility\n")
         print("The server is temporarily unavailable\n")
         raise last_exception
-    else:
+    return resp
+
+
+def __get_resp__(url,**kwargs):
+    assert set(kwargs.keys()).issubset(['provider', 'is_raise'])
+    is_raise = kwargs.get("is_raise", True)
+    resp = __get_raw_resp__(url, is_raise)
+    if resp is not None:
         if b"<S:Fault" in resp.content:
             if resp.ok:
-                return None
+                resp = None
             else:
                 if is_raise:
                     root = __get_xml_root__(resp)
@@ -446,58 +617,36 @@ def __get_resp__(url, **kwargs):
                         print(": ".join([el.tag, el.text]))
                     resp.raise_for_status()
                 else:
-                    return None
-        elif b"SUBMITTED" in resp.content:
-            key = [k for k in root.findall(__Uri__.sync_key_path)][0].text
-            async_status_url = __Uri__.BASE_ASYNC_URL[provider] + "status/" + key
-            return __get_async_resp__(async_status_url)
-        else:
-            return resp
-
-
-def __get_async_resp__(async_status_url):
-    status = ""
-    while status != "AVAILABLE":
-        resp = __get_resp__(async_status_url)
-        root = ET.fromstring(resp.content)
-        status = root.find(__Uri__.async_status_path).text
-        if status in ["SUBMITTED", "PROCESSING", "AVAILABLE"]:
-            pass
-        elif status in ["EXPIRED", "UNKNOWN_REQUEST"]:
-            raise ConnectionError
-        else:
-            print("Unexpected async status: try again.")
-            raise ConnectionError
-    return __get_resp__(async_status_url.replace("/status/","/data/"))
-
-
-def __get_info__(code):
-    agency_by_provider = [("EUROSTAT", "ESTAT"),
-                          ("COMEXT", "ESTAT"),
-                          ("COMP", "COMP"),
-                          ("EMPL", "EMPL"),
-                          ("GROW", "GROW"),
-                          ]
-    found = False
-    i = 0
-    while (not found) and (i <= len(agency_by_provider)):
-        try:
-            url = __Uri__.BASE_URL[agency_by_provider[i][0]] +\
-                    "dataflow/" +\
-                    agency_by_provider[i][1] +\
-                    "/" +\
-                    code
-            resp = __get_resp__(url, is_raise=False)
+                    resp = None
+        elif b"status></" in resp.content:
             root = __get_xml_root__(resp)
-            agencyId = agency_by_provider[i][1]
-            provider = agency_by_provider[i][0]
-            found = True
-        except:
-            pass
-        i += 1
-    if not found:
-        print("Dataset not found: " + code)
-        raise ValueError
-    else:
-        dsd_code = root.find(__Uri__.dsd_path).get("id")
-        return [agencyId, provider, dsd_code]
+            try:
+                status = root.find(__Uri__.async_status_path).text
+            except:
+                try:
+                    status = root.find(__Uri__.sync_status_path).text
+                except:
+                    print('Unexpected error: Status path not found.')
+                    raise ConnectionError
+            try:
+                key = root.find(__Uri__.async_key_path).text
+            except:
+                try:
+                    key = root.find(__Uri__.sync_key_path).text
+                except:
+                    print('Unexpected error: Key path not found.')
+                    raise ConnectionError
+            async_status_url = __Uri__.BASE_ASYNC_URL[kwargs["provider"]] +\
+                                "status/" +\
+                                key
+            while status != "AVAILABLE":
+                resp = __get_raw_resp__(async_status_url, True)
+                root = __get_xml_root__(resp)
+                status = root.find(__Uri__.async_status_path).text
+                if status in ["EXPIRED", "UNKNOWN_REQUEST"]:
+                    raise ConnectionError
+                elif status not in ["SUBMITTED", "PROCESSING", "AVAILABLE"]:
+                    print("Unexpected async status: " + status + " Try again.")
+                    raise ConnectionError
+            resp = __get_resp__(async_status_url.replace("/status/","/data/"))
+    return resp

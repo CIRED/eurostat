@@ -13,9 +13,9 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_descr = f.read()
 
 setup(name='eurostat',
-      version='1.0.4',
+      version='1.1.0',
       license='MIT',
-      date='2023',
+      date='2024',
       description="Eurostat Python Package",
       long_description=long_descr,
       long_description_content_type='text/markdown',

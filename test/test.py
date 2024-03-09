@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@author: Noemi E. Cazzaniga - 2022
+@author: Noemi E. Cazzaniga - 2024
 @email: noemi.cazzaniga@polimi.it
 """
 
@@ -31,7 +31,11 @@ par_values = eurostat.get_par_values('demo_r_d2jan', 'sex')
 print('par_values =')
 print(par_values)
 
-dic = eurostat.get_dic('demo_r_d2jan', 'sex')
+dic = eurostat.get_dic('demo_r_d2jan')
+print('dic =')
+print(dic)
+
+dic = eurostat.get_dic('demo_r_d2jan', 'sex', frmt='df')
 print('dic =')
 print(dic)
 

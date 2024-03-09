@@ -48,10 +48,14 @@ pip install eurostat
 ### As a list of tuples:
 
 ```python
-eurostat.get_toc()
+eurostat.get_toc([dataset='all'], [lang='en'])
 ```
 
 Read the table of contents and return a list of tuples. The first element of the list contains the header line. Dates are represented as strings.
+
+*lang* allows to download the table of contents in one of the following languages: *'en'*=English, *'fr'*=French, *'de'*=German, when provided by Eurostat. Default is English.
+
+If you want to get only the metadata of one dataset, set *dataset=code*, e.g. *dataset='MET_10R_3EMP'*.
 
 #### Example:
 
@@ -69,10 +73,14 @@ Read the table of contents and return a list of tuples. The first element of the
 ### As a pandas dataframe:
 
 ```python
-eurostat.get_toc_df()
+eurostat.get_toc_df([dataset='all'], [lang='en'])
 ```
 
 Read the table of contents of the main database and return a dataframe.
+
+*lang* allows to download the table of contents in one of the following languages: *"en"*=English, *"fr"*=French, *"de"*=German, when provided by Eurostat. Default is English.
+
+If you want to get only the metadata of one dataset, set *dataset=code*, e.g. *dataset='MET_10R_3EMP'*.
 
 #### Example:
 
@@ -160,34 +168,52 @@ Read the values of a given parameter *par* that can be found in a given dataset 
 ## Get an Eurostat dictionary:
 
 ```python
-eurostat.get_dic(code, par, [full=True], [frmt="list"], [lang="en"])
+eurostat.get_dic(code, [par=None], [full=True], [frmt="list"], [lang="en"])
 ```
 
-Read the dictionary of a given parameter *par* as a list of tuples or as a dictionary.
-You must provide also the dataset *code*.
+Read the dictionary with the descriptions of the parameters (dimensions) of a dataset if *par =None* or
+the descriptions of the values of a given parameter *par*, as a dataframe, a list of tuples or as a dictionary.
 
-If you want the full list of possible values of *par*, set *full=True*, while *full=False* returns only the values that are in the dataset, output from *get_par_values()*.
+If you want the full list of possible values of *par*, set *full=True*, while *full=False* returns only the values that are in the given dataset, output from *get_par_values()*.
 Default is *full=True*.
 
-*frmt="list"* makes the function return a list of tuples, where the first element of each tuple is the code value and the second one is its description.
+*frmt="list"* makes the function return a list of tuples without header.
+For the dictionary of the parameters, the first element of each tuple is the parameter code, the second is its name, and the third is its description (when provided).
+For the dictionary of the parameter values, the first element of each tuple is the code value and the second one is its description.
+Set *frmt="df"* to get a dataframe as output.
 If *frmt="dict"* it returns a dictionary.
 Default is *frmt="list"*.
 
 *lang* allows to download the dictionary in one of the following languages: *"en"*=English, *"fr"*=French, *"de"*=German, when provided by Eurostat. Default is English.
 
-#### Example:
+
+#### Example: Get the dictionary of the parameters of a dataset as a list of tuples
 
 ```python
 >>> import eurostat
->>> dic = eurostat.get_dic('demo_r_d2jan', 'sex')
+>>> dic = eurostat.get_dic('demo_r_d2jan')
 >>> dic
-[('T', 'Total'),
- ('M', 'Males'),
- ('F', 'Females'),
- ('DIFF', 'Absolute difference between males and females'),
- ('NAP', 'Not applicable'),
- ('NRP', 'No response'),
- ('UNK', 'Unknown')]
+[('freq', 'Time frequency', 'This code list contains the periodicity that refers to the frequency.'),
+ ('unit', 'Unit of measure', None),
+ ('sex', 'Sex', 'This code list provides information about the state of being male or female and refers ...'),
+ ('age', 'Age class', 'This code list contains periods of time, i.e. the length of time that a person or ...'),
+ ('geo', 'Geopolitical entity (reporting)', 'This code list defines the reporting geopolitical entities.')]
+```
+
+#### Example: Get the dictionary of the the parameter values of a dataset as a dataframe
+
+```python
+>>> import eurostat
+>>> dic = eurostat.get_dic('demo_r_d2jan', 'sex', frmt='df')
+>>> dic
+    val                                          descr
+0     T                                          Total
+1     M                                          Males
+2     F                                        Females
+3  DIFF  Absolute difference between males and females
+4   NAP                                 Not applicable
+5   NRP                                    No response
+6   UNK                                        Unknown
 ```
 
 
@@ -242,7 +268,6 @@ Flag meanings can be found [here][abbr].
  ('A', 'F3', 'S11', 'TOTAL', 'MIO_NAC', 'BE', None, ':', None, ':', 23.8, '', 39.3, ''),
  ('A', 'F3', 'S11', 'TOTAL', 'MIO_NAC', 'ES', None, ':', None, ':', 130.0, '', 122.2, '')]
 ```
-
 
 #### Example: Download a subset of data from a dataset without flags as list of tuples
 
@@ -408,7 +433,7 @@ Values can be number, string or list and generally are derived by *eurostat.get_
 
 ## In case you need to use a proxy:
 
-Before doing anything else, you must configure the https proxy.
+You can configure the https proxy with *setproxy*, or with *set_requests_args* (the latter is described in the next section).
 
 ```python
 eurostat.setproxy(proxyinfo)
@@ -417,7 +442,12 @@ eurostat.setproxy(proxyinfo)
 It requires in input *proxyinfo*, a dictionary with one key (*'https'*) and value containing the connection parameters in a list.  
 If authentication is not needed, set *username* and *password* to *None*.
 
-Example:
+It overwrites the proxy setting of any previous runs of *set_requests_args*.
+
+For the Eurostat API, only the https proxy is used.
+
+#### Example:
+
 ```python
 >>> import eurostat
 >>> proxyinfo = {'https': ['myuser', 'mypassword', 'http://url:port']}
@@ -425,6 +455,43 @@ Example:
 ```
 
 It always returns *None*.
+If you want to see your setting, use the function *get_requests_args*.
+
+
+## In case you need to configure the request:
+
+You may need to modify the default download settings.
+The Eurostat package uses the [requests][req] package and allows to set some of its arguments:
+* *timeout*: how long to wait for the server before raising an error, in sec. Default is 120 sec.
+* *proxies* : sets the proxies. It overwrites the proxy setting of any previous runs of *setproxy*. 
+              For the Eurostat API, only the https proxy is used. Default is None (the optional argument is not passed to the request).
+* *verify* : whether to verify the server’s TLS certificate, or to use a CA bundle. Defaults to None (the optional argument is not passed to the request). 
+* *cert* : whether to use a SSL client cert file. Defaults to None (the optional argument is not passed to the request).
+
+```python
+eurostat.set_requests_args([timeout=120.], [proxies=None], [verify=None], [cert=None])
+```
+
+It returns *None*.
+
+For detailed information, please refer to the documentation of the package [requests][req_req].
+
+#### Example:
+
+```python
+>>> import eurostat
+>>> mytimeout = 240.
+>>> myproxy = {'https': 'http://myuser:mypass@123.45.67.89:1234'}
+>>> eurostat.set_requests_args(timeout=mytimeout, proxies=myproxy)
+```
+
+To check the settings:
+
+```python
+eurostat.get_requests_args()
+```
+
+It returns a dictionary with the argument names and their respective values, exactly as they are passed to the request.
 
 
 ## Bug reports and feature requests:
@@ -440,7 +507,7 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 ## Data sources:
 
 * Eurostat database: [online catalog][onlinecat].
-* Eurostat nomenclatures: [RAMON][ram] metadata.
+* Eurostat classifications: [Access to classifications][clas].
 * Eurostat Interactive Data Browser: [Data Browser][databrow].
 * Eurostat Interactive Tool for Comext Data: [Easy Comext][comext].
 * Eurostat PRODCOM website: [PRODCOM][prodcom].
@@ -450,22 +517,36 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 
 ## References:
 
-* R package [eurostat][es]: R Tools for Eurostat Open Data.
 * Python package [pandas][pd]: Python Data Analysis Library.
+* Python package [requests][req]: HTTP Library for Python.
+* R package [eurostat][es]: R Tools for Eurostat Open Data.
 
 
 ## History:
 
+### version 1.1.0 (09 Mar 2024):
+
+* Bug fix: async download.
+* set_requests_args, get_requests_args added.
+* get_dic gives also dims dictionary.
+* Added dataframe output from get_dic.
+* get_toc of single dataset.
+* Enhanced localisation.
+
 ### version 1.0.4 (03 Apr 2023):
+
 * Changed input of setproxy to read the full address.
 
 ### version 1.0.3 (30 Mar 2023):
+
 * Bug fix: proxy setting.
 
 ### version 1.0.2 (14 Mar 2023):
+
 * Bug fix: proxy setting. Deprecated.
 
 ### version 1.0.1 (12 Oct 2022):
+
 * Bug fix (wheel for conda venv).
 
 ### version 1.0.0 (08 Oct 2022):
@@ -507,7 +588,7 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 
 ### version 0.1.2 (25 Nov 2019):
 
-* Added possibility to download flags.
+* Added possibility of downloading flags.
 * get_toc_df, subset_toc_df added.
 
 ### version 0.1.1 (21 Nov 2019):
@@ -518,14 +599,15 @@ Download and usage of Eurostat data is subject to Eurostat's general copyright n
 [pol]: https://ec.europa.eu/eurostat/about/policies/copyright
 [cond]: http://ec.europa.eu/geninfo/legal_notices_en.htm
 [onlinecat]: https://ec.europa.eu/eurostat/data/database
-[ram]: https://ec.europa.eu/eurostat/ramon/nomenclatures/index.cfm?TargetUrl=LST_NOM&StrGroupCode=SCL&StrLanguageCode=EN
+[clas]: https://ec.europa.eu/eurostat/web/metadata/classifications
 [databrow]: https://ec.europa.eu/eurostat/databrowser/
 [pd]: https://pandas.pydata.org/
 [es]: http://ropengov.github.io/eurostat/
 [issue]: https://bitbucket.org/noemicazzaniga/eurostat/issues/new
 [abbr]: https://ec.europa.eu/eurostat/statistics-explained/index.php?title=Tutorial:Symbols_and_abbreviations#Statistical_symbols.2C_abbreviations_and_units_of_measurement
 [prodcom]: https://ec.europa.eu/eurostat/web/prodcom
-[comext]: http://epp.eurostat.ec.europa.eu/newxtweb/
-[bulkcomext]: https://ec.europa.eu/eurostat/estat-navtree-portlet-prod/BulkDownloadListing?sort=1&dir=comext%2FCOMEXT_DATA%2FPRODUCTS
+[comext]: https://ec.europa.eu/eurostat/comext/newxtweb/
 [webserv]: https://ec.europa.eu/eurostat/web/main/data/web-services
 [condapack]: https://anaconda.org/noemicazzaniga/eurostat
+[req]: https://requests.readthedocs.io/en/latest/
+[req_req]: https://requests.readthedocs.io/en/latest/api/#requests.Session.request
